@@ -12,14 +12,9 @@
     .current-seminar { background: #fff; border: 2px solid #0047ab; margin: 10px; padding: 10px; border-radius: 8px; font-weight: bold; color: #333; }
     
     #video-container { 
-      width: 90%; 
-      max-width: 400px; 
-      margin: 10px auto; 
-      border: 3px solid #ccc; 
-      overflow: hidden; 
-      background-color: #000;
-      position: relative;
-      display: none;
+      width: 90%; max-width: 400px; margin: 10px auto; 
+      border: 3px solid #ccc; overflow: hidden; background-color: #000;
+      position: relative; display: none;
     }
     #preview { width: 100%; height: auto; }
     
@@ -55,6 +50,7 @@
 
   <div id="result"></div>
 
+  <!-- セミナー選択パネル -->
   <div id="config-panel">
     <h3>セミナーを選択してください</h3>
     <select id="seminar-select" style="font-size: 18px; padding: 10px; width: 100%;">
@@ -81,6 +77,9 @@
     const resultDiv = document.getElementById("result");
     let currentSeminar = "";
 
+    // 【重要】新しいデプロイURLをここに貼り付けてください
+    const gasUrl = "https://script.google.com/macros/s/AKfycbxpgmzCIPOxomqHaIH_6q2et36fBQ-7Rl_a9WCX56hqvytmigj_b1QfXyVegWVNLd26xw/exec";
+
     function openConfig() {
       document.getElementById("config-panel").style.display = "block";
     }
@@ -100,18 +99,14 @@
     function startScan() {
       resultDiv.style.display = "none";
       document.getElementById("video-container").style.display = "block";
-      const constraints = { video: { facingMode: "environment" } };
-
-      navigator.mediaDevices.getUserMedia(constraints)
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
         .then(function(stream) {
           video.srcObject = stream;
           video.setAttribute("playsinline", true);
           video.play();
           requestAnimationFrame(tick);
         })
-        .catch(function(err) {
-          alert("カメラが起動できませんでした: " + err);
-        });
+        .catch(function(err) { alert("カメラエラー: " + err); });
     }
 
     function tick() {
@@ -121,7 +116,6 @@
         canvas.drawImage(video, 0, 0, canvasElement.width, canvasElement.height);
         const imageData = canvas.getImageData(0, 0, canvasElement.width, canvasElement.height);
         const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "dontInvert" });
-
         if (code) {
           handleScanSuccess(code.data);
           return;
@@ -140,45 +134,26 @@
       resultDiv.style.display = "block";
       resultDiv.innerText = "照会中...";
 
-      // GAS側のgetCheckInStatusを呼び出し
-      google.script.run
-        .withSuccessHandler(function(res) {
-          if (res.status === "walk-in") {
-            const confirmMsg = "【セミナー予約なし】\n" + res.userData.company + "\n" + res.userData.name + " 様\nを当日受付しますか？";
-            if (confirm(confirmMsg)) {
-              processAttendance(qrData);
-            } else {
-              resultDiv.innerText = "キャンセルしました";
-            }
-          } else if (res.status === "error") {
-            resultDiv.className = "error";
-            resultDiv.innerText = res.message;
-          } else {
-            // 予約あり（status: ready）
-            processAttendance(qrData);
-          }
-        })
-        .withFailureHandler(function(err) {
-          resultDiv.className = "error";
-          resultDiv.innerText = "通信エラー: " + err;
-        })
-        .getCheckInStatus(qrData, currentSeminar);
-    }
-
-    function processAttendance(qrData) {
-      resultDiv.innerText = "書き込み中...";
-      
-      // GAS側のrecordSeminarCheckInを呼び出し
-      google.script.run
-        .withSuccessHandler(function(res) {
-          resultDiv.className = res.status === "success" ? "success" : "error";
+      // fetchを使ってGASのdoPostを叩く
+      fetch(gasUrl, {
+        method: "POST",
+        body: JSON.stringify({ qrData: qrData, seminarName: currentSeminar })
+      })
+      .then(response => response.json())
+      .then(res => {
+        if (res.status === "success") {
+          resultDiv.className = "success";
           resultDiv.innerText = res.message;
-        })
-        .withFailureHandler(function(err) {
+        } else {
           resultDiv.className = "error";
-          resultDiv.innerText = "システムエラー: " + err;
-        })
-        .recordSeminarCheckIn(qrData, currentSeminar);
+          resultDiv.innerText = res.message;
+        }
+      })
+      .catch(err => {
+        resultDiv.className = "error";
+        resultDiv.innerText = "通信エラーが発生しました";
+        console.error(err);
+      });
     }
   </script>
 </body>
