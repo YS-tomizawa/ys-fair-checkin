@@ -1,181 +1,69 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <base target="_top">
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>セミナー受付システム</title>
-  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
-  <style>
-    body { font-family: sans-serif; margin: 0; background-color: #f4f4f4; text-align: center; }
-    .header { background-color: #0047ab; color: white; padding: 15px; position: sticky; top: 0; z-index: 100; }
-    .current-seminar { background: #fff; border: 2px solid #0047ab; margin: 10px; padding: 10px; border-radius: 8px; font-weight: bold; color: #333; }
-    
-    /* 総合受付と同じビデオ表示スタイル */
-    #video-container { 
-      width: 90%; 
-      max-width: 400px; 
-      margin: 10px auto; 
-      border: 3px solid #ccc; 
-      overflow: hidden; 
-      background-color: #000;
-      position: relative;
-      display: none;
-    }
-    #preview { 
-      width: 100%; 
-      height: auto; 
-    }
-    
-    .btn { padding: 15px 30px; font-size: 18px; cursor: pointer; border-radius: 5px; border: none; margin: 10px; color: white; }
-    .btn-primary { background-color: #007bff; }
-    .btn-settings { background-color: #6c757d; }
-    #result { margin: 20px; padding: 15px; font-weight: bold; border-radius: 5px; display: none; }
-    .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-    .error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-    #config-panel { padding: 20px; background: white; height: 100vh; position: fixed; top: 0; left: 0; right: 0; z-index: 200; overflow-y: auto; }
-  </style>
+    <base target="_top">
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <style>
+        body { font-family: sans-serif; text-align: center; margin: 0; padding: 10px; background: #f4f4f4; }
+        #reader { width: 100%; max-width: 500px; margin: auto; background: white; border-radius: 8px; }
+        select { padding: 10px; font-size: 16px; width: 90%; margin-bottom: 20px; border-radius: 5px; }
+        .status-msg { margin-top: 20px; font-weight: bold; color: #333; }
+    </style>
 </head>
 <body>
-
-  <div class="header">
-    <h2 style="margin:0;">セミナー受付</h2>
-  </div>
-
-  <div id="status-area">
-    <div class="current-seminar">
-      <small>選択中のセミナー：</small><br>
-      <span id="display-name">未選択</span>
-    </div>
-    <button class="btn btn-settings" onclick="openConfig()">セミナーを切り替え</button>
-  </div>
-
-  <div id="video-container">
-    <video id="preview" playsinline></video>
-    <canvas id="canvas" style="display:none;"></canvas>
-  </div>
-  
-  <button id="scan-btn" class="btn btn-primary" onclick="startScan()" disabled>スキャン開始</button>
-
-  <div id="result"></div>
-
-  <div id="config-panel">
-    <h3>セミナーを選択してください</h3>
-    <select id="seminar-select" style="font-size: 18px; padding: 10px; width: 100%;">
-      <option value="">-- セミナーを選択 --</option>
-      <option value="6/10【A会場】10:30">6/10【A会場】10:30</option>
-      <option value="6/10【A会場】13:00">6/10【A会場】13:00</option>
-      <option value="6/10【B会場】10:45">6/10【B会場】10:45</option>
-      <option value="6/10【B会場】13:15">6/10【B会場】13:15</option>
-      <option value="6/10【B会場】14:30">6/10【B会場】14:30</option>
-      <option value="6/11【A会場】10:30">6/11【A会場】10:30</option>
-      <option value="6/11【A会場】13:00">6/11【A会場】13:00</option>
-      <option value="6/11【B会場】10:45">6/11【B会場】10:45</option>
-      <option value="6/11【B会場】13:15">6/11【B会場】13:15</option>
-      <option value="6/11【B会場】14:30">6/11【B会場】14:30</option>
+    <h2>セミナー受付システム</h2>
+    
+    <select id="seminar-select">
+        <option value="A会場_午前の部">A会場_午前の部</option>
+        <option value="B会場_セミナー">B会場_セミナー</option>
     </select>
-    <br><br>
-    <button class="btn btn-primary" onclick="saveConfig()">このセミナーで受付を開始</button>
-  </div>
 
-  <script>
-    const video = document.getElementById("preview");
-    const canvasElement = document.getElementById("canvas");
-    const canvas = canvasElement.getContext("2d");
-    const resultDiv = document.getElementById("result");
-    let currentSeminar = "";
+    <div id="reader"></div>
+    <div id="status" class="status-msg"></div>
 
-    function openConfig() {
-      document.getElementById("config-panel").style.display = "block";
-    }
+    <script>
+        const html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
 
-    function saveConfig() {
-      const select = document.getElementById("seminar-select");
-      currentSeminar = select.value;
-      if (!currentSeminar) {
-        alert("セミナーを選択してください");
-        return;
-      }
-      document.getElementById("display-name").innerText = currentSeminar;
-      document.getElementById("config-panel").style.display = "none";
-      document.getElementById("scan-btn").disabled = false;
-    }
+        function onScanSuccess(decodedText) {
+            html5QrcodeScanner.pause();
+            const seminarName = document.getElementById('seminar-select').value;
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerText = "照合中...";
 
-    function startScan() {
-      resultDiv.style.display = "none";
-      document.getElementById("video-container").style.display = "block";
-      
-      const constraints = {
-        video: { facingMode: "environment" }
-      };
-
-      navigator.mediaDevices.getUserMedia(constraints)
-        .then(function(stream) {
-          video.srcObject = stream;
-          video.setAttribute("playsinline", true);
-          video.play();
-          requestAnimationFrame(tick);
-        })
-        .catch(function(err) {
-          alert("カメラが起動できませんでした: " + err);
-        });
-    }
-
-    function tick() {
-      if (video.readyState === video.HAVE_ENOUGH_DATA) {
-        canvasElement.height = video.videoHeight;
-        canvasElement.width = video.videoWidth;
-        canvas.drawImage(video, 0, 0, canvasElement.width, canvasElement.height);
-        const imageData = canvas.getImageData(0, 0, canvasElement.width, canvasElement.height);
-        const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "dontInvert" });
-
-        if (code) {
-          stopScan(code.data);
-          return;
+            google.script.run.withSuccessHandler(function(res) {
+                if (res.status === "error") {
+                    alert(res.message);
+                    statusDiv.innerText = "";
+                    html5QrcodeScanner.resume();
+                } else if (res.status === "walk-in") {
+                    // 当日受付の確認ダイアログ
+                    const msg = "【予約なし】残席：" + res.remaining + "\n\n" +
+                                res.userData.company + "\n" +
+                                res.userData.last + " " + res.userData.first + " 様\n\n" +
+                                "当日参加を受け入れますか？";
+                    if (confirm(msg)) {
+                        executeCheckIn(decodedText, seminarName);
+                    } else {
+                        statusDiv.innerText = "";
+                        html5QrcodeScanner.resume();
+                    }
+                } else {
+                    // 予約あり：そのまま実行
+                    executeCheckIn(decodedText, seminarName);
+                }
+            }).getCheckInStatus(decodedText, seminarName);
         }
-      }
-      requestAnimationFrame(tick);
-    }
 
-    function stopScan(qrData) {
-      if (video.srcObject) {
-        video.srcObject.getTracks().forEach(track => track.stop());
-      }
-      document.getElementById("video-container").style.display = "none";
-      processAttendance(qrData);
-    }
-
-    function processAttendance(qrData) {
-      resultDiv.style.display = "block";
-      resultDiv.className = "";
-      resultDiv.innerText = "処理中...";
-
-      // 【重要】手順2でコピーしたURLをここに貼り付けてください
-      const gasUrl = "https://script.google.com/macros/s/AKfycbzEFnVf5snnioI7yqAQkwNpaJ4tyLnLjxJ1NQ4U2YbFTa0HNBJokIvdQDuN1ooRFRD9-Q/exec";
-
-      // 外部からGASへデータを送信する処理
-      fetch(gasUrl, {
-        method: "POST",
-        body: JSON.stringify({
-          qrData: qrData,
-          seminarName: currentSeminar
-        })
-      })
-      .then(response => response.json())
-      .then(data => {
-        if (data.status === "success") {
-          resultDiv.innerText = data.message;
-          resultDiv.classList.add("success");
-        } else {
-          resultDiv.innerText = "エラー: " + data.message;
-          resultDiv.classList.add("error");
+        function executeCheckIn(qrData, seminarName) {
+            document.getElementById('status').innerText = "登録中...";
+            google.script.run.withSuccessHandler(function(msg) {
+                alert(msg);
+                document.getElementById('status').innerText = "";
+                html5QrcodeScanner.resume();
+            }).recordSeminarCheckIn(qrData, seminarName);
         }
-      })
-      .catch(err => {
-        resultDiv.innerText = "通信エラー: " + err.message;
-        resultDiv.classList.add("error");
-      });
-    }
-  </script>
+
+        html5QrcodeScanner.render(onScanSuccess);
+    </script>
 </body>
 </html>
