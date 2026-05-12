@@ -26,7 +26,7 @@
     .btn { padding: 15px 30px; font-size: 18px; cursor: pointer; border-radius: 5px; border: none; margin: 10px; color: white; }
     .btn-primary { background-color: #007bff; }
     .btn-settings { background-color: #6c757d; }
-    #result { margin: 20px; padding: 15px; font-weight: bold; border-radius: 5px; display: none; }
+    #result { margin: 20px; padding: 15px; font-weight: bold; border-radius: 5px; display: none; min-height: 50px; }
     .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
     .error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
     #config-panel { padding: 20px; background: white; height: 100vh; position: fixed; top: 0; left: 0; right: 0; z-index: 200; overflow-y: auto; }
@@ -100,7 +100,6 @@
     function startScan() {
       resultDiv.style.display = "none";
       document.getElementById("video-container").style.display = "block";
-      
       const constraints = { video: { facingMode: "environment" } };
 
       navigator.mediaDevices.getUserMedia(constraints)
@@ -137,32 +136,49 @@
       }
       document.getElementById("video-container").style.display = "none";
       
-      // 予約状況の確認
-      google.script.run.withSuccessHandler(function(res) {
-        if (res.status === "walk-in") {
-          if (confirm("【セミナー予約なし】\n" + res.userData.company + "\n" + res.userData.name + " 様\nを当日受付しますか？")) {
-            processAttendance(qrData);
+      resultDiv.className = "";
+      resultDiv.style.display = "block";
+      resultDiv.innerText = "照会中...";
+
+      // GAS側のgetCheckInStatusを呼び出し
+      google.script.run
+        .withSuccessHandler(function(res) {
+          if (res.status === "walk-in") {
+            const confirmMsg = "【セミナー予約なし】\n" + res.userData.company + "\n" + res.userData.name + " 様\nを当日受付しますか？";
+            if (confirm(confirmMsg)) {
+              processAttendance(qrData);
+            } else {
+              resultDiv.innerText = "キャンセルしました";
+            }
+          } else if (res.status === "error") {
+            resultDiv.className = "error";
+            resultDiv.innerText = res.message;
           } else {
-            resultDiv.innerText = "受付をキャンセルしました";
-            resultDiv.style.display = "block";
+            // 予約あり（status: ready）
+            processAttendance(qrData);
           }
-        } else if (res.status === "error") {
-          alert(res.message);
-        } else {
-          processAttendance(qrData);
-        }
-      }).getCheckInStatus(qrData, currentSeminar);
+        })
+        .withFailureHandler(function(err) {
+          resultDiv.className = "error";
+          resultDiv.innerText = "通信エラー: " + err;
+        })
+        .getCheckInStatus(qrData, currentSeminar);
     }
 
     function processAttendance(qrData) {
-      resultDiv.style.display = "block";
-      resultDiv.className = "";
-      resultDiv.innerText = "処理中...";
-
-      google.script.run.withSuccessHandler(function(data) {
-        resultDiv.className = data.status === "success" ? "success" : "error";
-        resultDiv.innerText = data.message;
-      }).recordSeminarCheckIn(qrData, currentSeminar);
+      resultDiv.innerText = "書き込み中...";
+      
+      // GAS側のrecordSeminarCheckInを呼び出し
+      google.script.run
+        .withSuccessHandler(function(res) {
+          resultDiv.className = res.status === "success" ? "success" : "error";
+          resultDiv.innerText = res.message;
+        })
+        .withFailureHandler(function(err) {
+          resultDiv.className = "error";
+          resultDiv.innerText = "システムエラー: " + err;
+        })
+        .recordSeminarCheckIn(qrData, currentSeminar);
     }
   </script>
 </body>
