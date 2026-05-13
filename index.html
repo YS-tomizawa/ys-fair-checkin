@@ -141,6 +141,9 @@
       })
       .then(response => response.json())
       .then(res => {
+        // 改行コード \n を HTMLの改行 <br> に変換
+        const formattedMsg = res.message.replace(/\n/g, "<br>");
+        
         if (res.status === "success") {
           resultDiv.className = "success";
           resultDiv.innerText = res.message;
